@@ -1,8 +1,8 @@
 package main
 
 import (
-	_ "MeNA-api/docs"
-	_ "MeNA-api/routers"
+	_ "MeNA-Api/docs"
+	_ "MeNA-Api/routers"
 
 	"github.com/astaxie/beego"
 )
