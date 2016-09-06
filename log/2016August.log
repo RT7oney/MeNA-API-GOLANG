@@ -15,3 +15,8 @@
 [@2016-08-13 14:12:11.454062415 +0800 CST#]------åŠ å¯†æ¶ˆæ¯@User.Register.EncodeData:8¯±ŞÔôwC5«96É‘šÊ,>ÚñAe#eyKêNg™fß›´İÈÙ›?ŠµÎÑÔÿ;«!
 [@2016-08-13 14:12:20.77864646 +0800 CST#]------åŠ å¯†æ¶ˆæ¯@User.Register.EncodeData:8¯±ŞÔôwC5«96É‘šÊ,>ÚñAe#eyKêNg™fß›´İÈÙ›?ŠµÎÑÔÿ;«!
 [@2016-08-13 14:12:29.866117874 +0800 CST#]------åŠ å¯†æ¶ˆæ¯@User.Register.EncodeData:8¯±ŞÔôwC5«96É‘šÊ,>ÚñAe#eyKêNg™fß›´İÈÙ›?ŠµÎÑÔÿ;«!
+[@2016-08-14 17:22:29.583821633 +0800 CST#]------Dial æ–¹æ³•æƒ³æœåŠ¡å™¨æ‹¨å·é”™è¯¯ : (pkg@common)dial tcp 127.0.0.1:10002: getsockopt: connection refused
+[@2016-08-14 19:30:36.354107652 +0800 CST#]------add new movie_tag error @movieMod.AddMovieTag() : NOT NULL constraint failed: all__movie__tags.created
+[@2016-08-14 19:31:34.11872452 +0800 CST#]------add new movie_tag error @movieMod.AddMovieTag() : NOT NULL constraint failed: all__movie__tags.created
+[@2016-08-19 10:40:04.109013784 +0800 CST#]------add new dev_key error @DevMod.AddAppKey() : NOT NULL constraint failed: dev__app__key.created
+[@2016-08-31 22:44:21.374227865 +0800 CST#]------encode data error @common.EncodeData:crypto/des: invalid key size 32

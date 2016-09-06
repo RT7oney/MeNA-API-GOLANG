@@ -8,8 +8,8 @@ func init() {
 
 	beego.GlobalControllerRouter["MeNA-Api/controllers/User:RegisterController"] = append(beego.GlobalControllerRouter["MeNA-Api/controllers/User:RegisterController"],
 		beego.ControllerComments{
-			"Post",
-			`/User.Register`,
+			"Register",
+			`/register`,
 			[]string{"post"},
 			nil})
 

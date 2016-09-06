@@ -9,9 +9,11 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	// "encoding/pem"
-	// "fmt"
+	"fmt"
 	// "log"
-	"github.com/astaxie/beego"
+	"crypto/md5"
+	"encoding/hex"
+	// "github.com/astaxie/beego"
 	"io"
 	"net"
 	"os"
@@ -20,19 +22,58 @@ import (
 	"time"
 	// "strings"
 	// "bufio"
-	// "reflect"
+	// "errors"
+	"reflect"
+	"unsafe"
 )
+
+/**
+ * 获取接口app_key
+ */
+func MakeAppKey(content map[string]string) (app_key string) {
+	timestamp := time.Now().Unix()
+	tmpstr := content["api_token"] + content["dev_name"] + strconv.FormatInt(timestamp, 10)
+	h := md5.New()
+	h.Write([]byte(tmpstr))
+	app_key_str := hex.EncodeToString(h.Sum(nil))
+	app_key = Substr(app_key_str, 0, 8)
+	return
+}
+
+/**
+ * 检验接口权限
+ */
+func CheckSign(check map[string]string, app_key map[string]string) int {
+	timenow := time.Now().Unix()
+	expire_time, _ := strconv.ParseInt(app_key["expire_time"], 10, 64)
+	// fmt.Println("==============过期时间================")
+	// fmt.Println(expire_time)
+	if expire_time < timenow {
+		return -1 //app_key过期
+	}
+	tmpstr := app_key["app_key"] + check["timestamp"]
+	h := md5.New()
+	h.Write([]byte(tmpstr))
+	server_sign := hex.EncodeToString(h.Sum(nil))
+	if server_sign != check["sign"] {
+		return 0 // 签名不匹配
+	}
+	return 1 //成功
+}
 
 /**
  * 请求组件的方法
  */
-func Request(url string, data map[string]string) (ret string) {
+func Request(url string, data map[string]string, app_key string) map[string]string {
 	var msg = make([]byte, 1024) // 创建一个字节切片去接收服务器返回的消息
+	var ret = make(map[string]string)
 	jsonstr, err := json.Marshal(data)
 	if err != nil {
-		WriteLog("json 转化成 map 系统错误 : (pkg@common)")
+		WriteLog("json to map sync error @common.Request")
 		// log.Fatal("json to map error : %d\n", err)
-		ret = Response(503, "json转化出错")
+		// ret = Response(503, "json转化出错")
+		ret["code"] = "503"
+		ret["msg"] = "json转化出错"
 	}
 	// fmt.Println(reflect.TypeOf(string(jsonstr)))
 	// fmt.Println(string(jsonstr))
@@ -41,36 +82,53 @@ func Request(url string, data map[string]string) (ret string) {
 	 */
 	conn, err := net.Dial("tcp", url)
 	if err != nil {
-		WriteLog("Dial 方法想服务器拨号错误 : (pkg@common)" + err.Error())
+		WriteLog("Dial the server error @common.Request" + err.Error())
 		// log.Fatal("Dial server : %d\n", err)
-		ret = Response(500, "连接服务器失败")
+		// ret = Response(500, "连接服务器失败")
+		ret["code"] = "500"
+		ret["msg"] = "连接服务器失败"
 	}
 	in, err := conn.Write([]byte(jsonstr))
 	if err != nil {
-		WriteLog("向服务器发送消息失败 : (pkg@common)" + strconv.Itoa(in) + "error: " + err.Error())
+		WriteLog("send msg to server error @common.Request" + strconv.Itoa(in) + "error: " + err.Error())
 		// log.Fatal("Error when send to server : %d\n", in)
-		ret = Response(501, "向服务器发送消息失败")
+		// ret = Response(501, "向服务器发送消息失败")
+		ret["code"] = "501"
+		ret["msg"] = "向服务器发送消息失败"
 	}
 	length, err := conn.Read(msg)
 	if err != nil {
-		WriteLog("从服务器接收消息失败 : (pkg@common)" + err.Error())
+		WriteLog("get msg from server error @common.Request" + err.Error())
 		// log.Fatal("Error when read msg from server : %d\n", err)
-		ret = Response(502, "从服务器接收消息失败")
+		// ret = Response(502, "从服务器接收消息失败")
+		ret["code"] = "502"
+		ret["msg"] = "从服务器接收消息失败"
 	}
 	// ret = string(msg[0:length])
-	encode_msg, _ := EncodeData(msg[0:length])
-	the_data := base64.StdEncoding.EncodeToString(encode_msg)
-	ret = Response(200, the_data)
-	return
+	if app_key != "" {
+		encode_msg, _ := EncodeData(msg[0:length], app_key)
+		// ret = Response(200, encode_msg)
+		ret["code"] = "200"
+		ret["msg"] = encode_msg
+	} else {
+		// ret = Response(200, string(msg[0:length]))
+		ret["code"] = "200"
+		ret["msg"] = string(msg[0:length])
+	}
+	// the_data := base64.StdEncoding.EncodeToString(encode_msg)
+	return ret
 }
 
 /**
  * 处理组件响应的方法
  */
-func Response(code int, data string) string {
-	var ret = make(map[string]string)
+func Response(code int, msg string, data interface{}) string {
+	var ret = make(map[string]interface{})
 	ret["code"] = strconv.Itoa(code)
-	ret["msg"] = data
+	ret["msg"] = msg
+	if data != nil {
+		ret["data"] = data
+	}
 	jsonret, _ := json.Marshal(ret)
 	return string(jsonret)
 }
@@ -78,14 +136,14 @@ func Response(code int, data string) string {
 /**
  * 数据加密方法 采用RSA方式
  */
-func EncodeData(data []byte) ([]byte, error) {
+func EncodeData(data []byte, key_str string) (string, error) {
 	/*##################des##################*/
-	key_str := beego.AppConfig.String("DesKey")
+	// key_str := beego.AppConfig.String("DesKey")
 	key := []byte(key_str)
 	block, err := des.NewCipher(key)
 	if err != nil {
-		WriteLog("加密消息出错@common.EncodeData:" + err.Error())
-		return nil, err
+		WriteLog("encode data error @common.EncodeData:" + err.Error())
+		return "", err
 	}
 	data = PKCS5Padding(data, block.BlockSize())
 	// data = ZeroPadding(data, block.BlockSize())
@@ -96,8 +154,8 @@ func EncodeData(data []byte) ([]byte, error) {
 	// crypted := data
 
 	blockMode.CryptBlocks(crypted, data)
-
-	return crypted, nil
+	encode_data := base64.StdEncoding.EncodeToString(crypted)
+	return encode_data, nil
 	/*########################################*/
 }
 
@@ -108,6 +166,7 @@ func DecodeData(crypted, key []byte) ([]byte, error) {
 	/*##################des##################*/
 	block, err := des.NewCipher(key)
 	if err != nil {
+		WriteLog("decode data error @common.EncodeData:" + err.Error())
 		return nil, err
 	}
 	blockMode := cipher.NewCBCDecrypter(block, key)
@@ -147,6 +206,74 @@ func IsEmail(email string) bool {
 	} else {
 		return false
 	}
+}
+
+/**
+ * 字符串截取
+ */
+func Substr(str string, start, length int) string {
+	rs := []rune(str)
+	rl := len(rs)
+	end := 0
+	if start < 0 {
+		start = rl - 1 + start
+	}
+	end = start + length
+	if start > end {
+		start, end = end, start
+	}
+	if start < 0 {
+		start = 0
+	}
+	if start > rl {
+		start = rl
+	}
+	if end < 0 {
+		end = 0
+	}
+	if end > rl {
+		end = rl
+	}
+
+	return string(rs[start:end])
+}
+
+/**
+ * 将不同类型的切片转化成[]byte
+ */
+func ByteSlice(slice interface{}) (data []byte) {
+	sv := reflect.ValueOf(slice)
+	if sv.Kind() != reflect.Slice {
+		WriteLog("ByteSlice called with non-slice value of type @ common.ByteSlice")
+		// return nil, errors.New("ByteSlice called with non-slice value of type")
+		panic("ByteSlice called with non-slice value of type error")
+	}
+	h := (*reflect.SliceHeader)((unsafe.Pointer(&data)))
+	h.Cap = sv.Cap() * int(sv.Type().Elem().Size())
+	h.Len = sv.Len() * int(sv.Type().Elem().Size())
+	h.Data = sv.Pointer()
+	return
+}
+
+/**
+ * 将[]x转换成[]y
+ */
+func SliceTrans(slice interface{}, newSliceType reflect.Type) interface{} {
+	sv := reflect.ValueOf(slice)
+	if sv.Kind() != reflect.Slice {
+		WriteLog("Slice called with non-slice value of type @ common.Slice")
+		panic(fmt.Sprintf("Slice called with non-slice value of type %T", slice))
+	}
+	if newSliceType.Kind() != reflect.Slice {
+		WriteLog("Slice called with non-slice value of type @ common.Slice")
+		panic(fmt.Sprintf("Slice called with non-slice type of type %T", newSliceType))
+	}
+	newSlice := reflect.New(newSliceType)
+	hdr := (*reflect.SliceHeader)(unsafe.Pointer(newSlice.Pointer()))
+	hdr.Cap = sv.Cap() * int(sv.Type().Elem().Size()) / int(newSliceType.Elem().Size())
+	hdr.Len = sv.Len() * int(sv.Type().Elem().Size()) / int(newSliceType.Elem().Size())
+	hdr.Data = uintptr(sv.Pointer())
+	return newSlice.Elem().Interface()
 }
 
 /**
