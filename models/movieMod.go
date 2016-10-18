@@ -12,12 +12,6 @@ import (
 	"time"
 )
 
-type Result struct {
-	TotalCount int
-	TotalPages int
-	List       []string
-}
-
 func AddMovieTag(content string) (tag_id int64, err error) {
 	var db_orm = orm.NewOrm() //orm不能定义为全局的
 	movie_tag := &db.AllMovieTags{
